@@ -1,58 +1,143 @@
 import { useState, useEffect } from 'react';
+import { Task, Subtask, Project, TaskStats, Priority, TaskStatus } from '../types';
+
+const DEFAULT_PROJECTS: Project[] = [
+  { id: 'personal', name: 'Personal', color: '#3B82F6', description: 'Personal tasks', createdAt: new Date().toISOString() },
+  { id: 'work', name: 'Work', color: '#8B5CF6', description: 'Work tasks', createdAt: new Date().toISOString() },
+  { id: 'learning', name: 'Learning', color: '#10B981', description: 'Learning tasks', createdAt: new Date().toISOString() },
+];
 
 const useTaskData = () => {
-    const [tasks, setTasks] = useState([]);
-    const [projects, setProjects] = useState([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
 
-    useEffect(() => {
-        const storedTasks = JSON.parse(localStorage.getItem('tasks')) || [];
-        const storedProjects = JSON.parse(localStorage.getItem('projects')) || [];
-        setTasks(storedTasks);
-        setProjects(storedProjects);
-    }, []); // Load tasks and projects from localStorage
+  useEffect(() => {
+    const storedTasks: Task[] = JSON.parse(localStorage.getItem('tasks') || '[]');
+    const storedProjects: Project[] = JSON.parse(localStorage.getItem('projects') || 'null') ?? DEFAULT_PROJECTS;
+    setTasks(storedTasks);
+    setProjects(storedProjects);
+  }, []);
 
-    useEffect(() => {
-        localStorage.setItem('tasks', JSON.stringify(tasks));
-        localStorage.setItem('projects', JSON.stringify(projects));
-    }, [tasks, projects]); // Update localStorage when tasks or projects change
+  useEffect(() => {
+    localStorage.setItem('tasks', JSON.stringify(tasks));
+  }, [tasks]);
 
-    const addTask = (task) => {
-        setTasks([...tasks, task]);
+  useEffect(() => {
+    localStorage.setItem('projects', JSON.stringify(projects));
+  }, [projects]);
+
+  const addTask = (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'subtasks'>) => {
+    const newTask: Task = {
+      ...task,
+      id: crypto.randomUUID(),
+      subtasks: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
+    setTasks(prev => [...prev, newTask]);
+  };
 
-    const updateTask = (taskId, updatedTask) => {
-        setTasks(tasks.map(task => task.id === taskId ? { ...task, ...updatedTask } : task));
+  const updateTask = (taskId: string, updatedFields: Partial<Task>) => {
+    setTasks(prev =>
+      prev.map(task =>
+        task.id === taskId
+          ? { ...task, ...updatedFields, updatedAt: new Date().toISOString() }
+          : task
+      )
+    );
+  };
+
+  const deleteTask = (taskId: string) => {
+    setTasks(prev => prev.filter(task => task.id !== taskId));
+  };
+
+  const addSubtask = (taskId: string, title: string) => {
+    const newSubtask: Subtask = {
+      id: crypto.randomUUID(),
+      title,
+      completed: false,
+      createdAt: new Date().toISOString(),
     };
+    setTasks(prev =>
+      prev.map(task =>
+        task.id === taskId
+          ? { ...task, subtasks: [...task.subtasks, newSubtask], updatedAt: new Date().toISOString() }
+          : task
+      )
+    );
+  };
 
-    const deleteTask = (taskId) => {
-        setTasks(tasks.filter(task => task.id !== taskId));
+  const updateSubtask = (taskId: string, subtaskId: string, completed: boolean) => {
+    setTasks(prev =>
+      prev.map(task =>
+        task.id === taskId
+          ? {
+              ...task,
+              subtasks: task.subtasks.map(s => (s.id === subtaskId ? { ...s, completed } : s)),
+              updatedAt: new Date().toISOString(),
+            }
+          : task
+      )
+    );
+  };
+
+  const deleteSubtask = (taskId: string, subtaskId: string) => {
+    setTasks(prev =>
+      prev.map(task =>
+        task.id === taskId
+          ? {
+              ...task,
+              subtasks: task.subtasks.filter(s => s.id !== subtaskId),
+              updatedAt: new Date().toISOString(),
+            }
+          : task
+      )
+    );
+  };
+
+  const createProject = (project: Omit<Project, 'id' | 'createdAt'>) => {
+    const newProject: Project = {
+      ...project,
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
     };
+    setProjects(prev => [...prev, newProject]);
+  };
 
-    const addSubtask = (taskId, subtask) => {
-        updateTask(taskId, { subtasks: [...tasks.find(task => task.id === taskId).subtasks, subtask] });
+  const deleteProject = (projectId: string) => {
+    setProjects(prev => prev.filter(p => p.id !== projectId));
+    setTasks(prev =>
+      prev.map(task => (task.projectId === projectId ? { ...task, projectId: null } : task))
+    );
+  };
+
+  const calculateStatistics = (): TaskStats => {
+    return {
+      total: tasks.length,
+      completed: tasks.filter(t => t.status === 'completed').length,
+      inProgress: tasks.filter(t => t.status === 'in-progress').length,
+      byPriority: {
+        high: tasks.filter(t => t.priority === 'high').length,
+        medium: tasks.filter(t => t.priority === 'medium').length,
+        low: tasks.filter(t => t.priority === 'low').length,
+      },
     };
+  };
 
-    const deleteSubtask = (taskId, subtaskId) => {
-        const task = tasks.find(task => task.id === taskId);
-        updateTask(taskId, { subtasks: task.subtasks.filter(subtask => subtask.id !== subtaskId) });
-    };
-
-    const createProject = (project) => {
-        setProjects([...projects, project]);
-    };
-
-    const deleteProject = (projectId) => {
-        setProjects(projects.filter(project => project.id !== projectId));
-        setTasks(tasks.filter(task => task.projectId !== projectId)); // Remove tasks associated with the project
-    };
-
-    const calculateStatistics = () => {
-        const totalTasks = tasks.length;
-        const completedTasks = tasks.filter(task => task.completed).length;
-        return { totalTasks, completedTasks };
-    };
-
-    return { tasks, addTask, updateTask, deleteTask, addSubtask, deleteSubtask, projects, createProject, deleteProject, calculateStatistics };
+  return {
+    tasks,
+    projects,
+    addTask,
+    updateTask,
+    deleteTask,
+    addSubtask,
+    updateSubtask,
+    deleteSubtask,
+    createProject,
+    deleteProject,
+    calculateStatistics,
+  };
 };
 
+export type { Priority, TaskStatus };
 export default useTaskData;
