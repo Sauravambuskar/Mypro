@@ -1,3 +1,4 @@
+import React from 'react';
 import { Task, TaskStats } from '../types';
 import { CheckCircle, Circle, AlertCircle, TrendingUp } from 'lucide-react';
 
